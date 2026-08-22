@@ -1,0 +1,160 @@
+# The exporter follows the multi-target pattern of blackbox_exporter. This file
+# holds no target. Prometheus gives the target in the query string of each
+# scrape, so a new feed needs no restart of the exporter.
+#
+# One target is one GTFS-Realtime feed URL. GTFS-Realtime has no discovery
+# document, so a network that publishes trip updates, vehicle positions and
+# service alerts publishes three URLs and gets three targets. Group them with a
+# label in Prometheus.
+
+# Address that the exporter listens on.
+listen_address: ":10053"
+
+# Budget for one scrape. Prometheus sends the header
+# X-Prometheus-Scrape-Timeout-Seconds on every scrape, and the exporter uses
+# the lower of the two. A budget above the scrape timeout only spends work on a
+# request that Prometheus has already abandoned.
+timeout: 30s
+
+# Budget for the HTTP read of one feed. Keep it below timeout.
+request_timeout: 10s
+
+# User agent that the exporter sends. Some operators ask for a contact address.
+user_agent: "gtfs_exporter (+https://example.org/contact)"
+
+# Hosts that the exporter accepts as a target. An empty list accepts every
+# host, which lets any caller reach any address that the exporter can reach.
+# Keep this list short.
+#
+# The list is tested again on every redirect. A hostile target that answers
+# with a redirect into your network is refused, and the refusal is counted
+# under gtfs_exporter_requests_rejected_total{reason="forbidden_redirect"}.
+#
+# The static_gtfs URL of a module skips this test, because it comes from this
+# file and not from a caller. That matters: the static feed of data.gouv.fr
+# redirects to a third-party host.
+allowed_hosts:
+  - proxy.transport.data.gouv.fr
+  - cdn.mbta.com
+
+# Scrapes that may run at the same time. The rest get HTTP 503.
+max_in_flight: 8
+
+modules:
+  # A module named default serves every request that names none.
+  default: {}
+
+  # A network that publishes no delay of its own.
+  #
+  # Rennes and MBTA send absolute times and no delay field, so phase 1 reported
+  # no delay for them at all. With schedule on, the exporter reads
+  # stop_times.txt and measures the predictions against the timetable.
+  #
+  # It costs memory, and the cost is the whole timetable. Measured: Rennes
+  # holds 1.0 million stop times in 34 MB of live heap and 65 MB resident, and
+  # MBTA holds 2.2 million in 63 MB and 105 MB. Budget 30 to 40 bytes a row.
+  # Leave it off for a feed that already publishes a delay, because it would
+  # buy nothing.
+  rennes:
+    per_route: true
+    static_gtfs:
+      url: https://www.data.gouv.fr/api/1/datasets/r/0644f537-575e-4cce-9570-06165d6f3b27
+      schedule: true
+      # The refresh interval is a floor, not the whole policy. A dataset states
+      # when it expires, and the loader renews against that deadline: Rennes
+      # publishes a twelve day window and SNCF a one hundred and sixty two day
+      # one, so no single interval suits both.
+      refresh_interval: 24h
+      # Start renewing this long before the dataset expires.
+      renew_before: 48h
+      # Retry this often inside that margin, until a later dataset arrives. A
+      # conditional request answers 304, so it is cheap.
+      renew_interval: 1h
+      # Refuse a network whose timetable would not fit. The route index still
+      # loads, because it is small and useful on its own.
+      schedule_max_rows: 5000000
+
+  # A network that publishes no route identifier.
+  #
+  # SNCF sends 1140 trip updates and sets route_id on none of them. Without a
+  # static feed the exporter can count trips but can name no route. With one,
+  # it resolves the route of each trip and reports 460 named routes.
+  #
+  # Without schedule, the exporter reads agency.txt, routes.txt, trips.txt,
+  # feed_info.txt and the calendar. It never reads stop_times.txt, which is
+  # 1.5 GB uncompressed for Ile-de-France, nor shapes.txt, which is 991 MB. It
+  # uses HTTP range requests, so it reads 1.5% of that 271 MB zip.
+  #
+  # SNCF publishes its own delay, so schedule buys it nothing and stays off.
+  #
+  # The load runs in the background and a scrape never waits for it. Watch
+  # gtfs_static_loaded to see when the first one finished.
+  sncf:
+    static_gtfs:
+      url: https://www.data.gouv.fr/api/1/datasets/r/9ae758ec-cd7a-40cd-a890-bb3963224942
+      # The default is 12h. A conditional request makes most refreshes cost one
+      # round trip, because the file serves an ETag.
+      refresh_interval: 12h
+
+  # The three feeds of one network must name the same static_gtfs URL. The
+  # exporter then keeps one index for all of them, rather than reading the same
+  # zip three times.
+  rennes_routes_only:
+    # per_route adds about three series per route: the trip count, the name,
+    # and the vehicles. Count the routes of a network before you turn it on:
+    # Rennes has 52, MBTA 399 and Ile-de-France 1973.
+    #
+    # The counting metrics carry the route identifier alone. Join
+    # gtfs_static_route_info on route_id for the name and the type.
+    per_route: true
+    static_gtfs:
+      url: https://www.data.gouv.fr/api/1/datasets/r/0644f537-575e-4cce-9570-06165d6f3b27
+
+  # Everything a status board needs for one network.
+  rennes_board:
+    per_route: true
+    # The delay histogram per route: eighteen series a route on top of the
+    # three above. Measured about 880 series for Rennes at peak and 8,400 for
+    # MBTA. It needs per_route, because the histogram carries only the
+    # identifier and the name comes from gtfs_static_route_info.
+    per_route_delay: true
+    # A trip later than this counts as late. A metro and a regional train do
+    # not agree on what late means. The default is 5m.
+    late_threshold: 300s
+    static_gtfs:
+      url: https://www.data.gouv.fr/api/1/datasets/r/0644f537-575e-4cce-9570-06165d6f3b27
+      schedule: true
+
+  # An operator that asks for an API key. A key must not travel in a query
+  # string, so it lives here.
+  keyed_operator:
+    headers:
+      x-api-key: replace-me
+
+  # An operator that stalls. Raise the budget for that operator alone, rather
+  # than raising it everywhere.
+  slow_operator:
+    request_timeout: 25s
+
+  # An operator that serves the first request of a connection at once and then
+  # holds every later one. Open a new connection for each scrape instead.
+  connection_hostile_operator:
+    reuse_connections: false
+
+  # A network whose delays need different buckets. The default covers -600 to
+  # 7200 seconds, which fits every feed measured. The bounds must increase.
+  commuter_rail:
+    delay_buckets: [-300, -60, 0, 60, 180, 300, 600, 1200, 2400]
+
+  # A native histogram instead of a classic one.
+  #
+  # Read this before you turn it on. A constant native histogram carries no
+  # classic buckets, so a Prometheus without native-histogram support sees only
+  # the sum and the count. Prometheus needs --enable-feature=native-histograms
+  # and protobuf in scrape_protocols.
+  #
+  # Native buckets are exponential, and the median delay of a real feed is
+  # exactly 0. The resolution is therefore worst where most of the data sits.
+  # The classic form is the better default for delays.
+  high_resolution_tails:
+    native_histogram: true

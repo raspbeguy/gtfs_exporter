@@ -1,0 +1,10 @@
+# The exporter follows the multi-target pattern of blackbox_exporter. This file
+# holds no target. Prometheus gives the target in the query string of each
+# scrape.
+#
+# This file sets no allowed_hosts, so the exporter accepts every host and warns
+# at start. Mount your own file over /etc/gtfs_exporter/config.yml for a real
+# deployment.
+
+modules:
+  default: {}

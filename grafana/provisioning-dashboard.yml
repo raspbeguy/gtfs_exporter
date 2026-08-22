@@ -1,0 +1,17 @@
+# Grafana provisioning for the dashboards of this exporter.
+#
+# Copy this file to /etc/grafana/provisioning/dashboards/ and copy the JSON
+# files to the path below. Grafana then loads them at start.
+apiVersion: 1
+
+providers:
+  - name: gtfs_exporter
+    orgId: 1
+    folder: Transit
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/gtfs_exporter
+      foldersFromFilesStructure: false

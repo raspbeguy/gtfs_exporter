@@ -1,0 +1,690 @@
+{
+  "uid": "gtfs-rt-service",
+  "title": "GTFS-Realtime service",
+  "tags": [
+    "gtfs-rt",
+    "transit",
+    "prometheus"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "links": [
+    {
+      "title": "GTFS-Realtime dashboards",
+      "type": "dashboards",
+      "tags": [
+        "gtfs-rt"
+      ],
+      "asDropdown": true,
+      "includeVars": true,
+      "keepTime": true,
+      "icon": "external link",
+      "tooltip": "",
+      "url": "",
+      "targetBlank": false
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Data source",
+        "current": {},
+        "hide": 0,
+        "refresh": 1
+      },
+      {
+        "name": "job",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": "label_values(gtfs_rt_up, job)",
+        "label": "Job",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": {}
+      },
+      {
+        "name": "network",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": "label_values(gtfs_rt_up{job=~\"$job\"}, network)",
+        "label": "Network",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": "rennes",
+          "value": "rennes"
+        },
+        "allValue": null,
+        "description": "The dashboard shows one network. Metrics from different networks are not comparable and must never be summed together.",
+        "options": [],
+        "sort": 1
+      },
+      {
+        "name": "instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": "label_values(gtfs_rt_up{job=~\"$job\",network=\"$network\"}, instance)",
+        "label": "Feed",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": {},
+        "description": "The feeds of the selected network. They carry different metric families."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Service",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "title": "Vehicles reporting",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Sum of gtfs_rt_vehicles over every stop status. A feed of trip updates carries no vehicle, so it shows nothing here.",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (instance) (gtfs_rt_vehicles{job=~\"$job\",network=\"$network\",instance=~\"$instance\"})",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Vehicles by stop status",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Never add this to the occupancy or congestion panels. They count the same vehicles a second time.",
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (current_status) (gtfs_rt_vehicles{job=~\"$job\",network=\"$network\",instance=~\"$instance\"})",
+          "legendFormat": "{{current_status}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "title": "Trip delay, median",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Absent for a feed that publishes absolute times and no delay. Rennes and MBTA both do this, and an absent line is the correct answer.",
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.5, sum by (instance, le) (gtfs_rt_trip_delay_seconds_bucket{job=~\"$job\",network=\"$network\",instance=~\"$instance\"}))",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "title": "Trip delay, 90th percentile",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 9,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.9, sum by (instance, le) (gtfs_rt_trip_delay_seconds_bucket{job=~\"$job\",network=\"$network\",instance=~\"$instance\"}))",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "title": "Trips more than 5 minutes late",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 16,
+        "y": 9,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "1 - (sum by (instance) (gtfs_rt_trip_delay_seconds_bucket{job=~\"$job\",network=\"$network\",instance=~\"$instance\",le=~\"300(\\\\.0)?\"}) / sum by (instance) (gtfs_rt_trip_delay_seconds_count{job=~\"$job\",network=\"$network\",instance=~\"$instance\"}))",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "title": "Trips by schedule relationship",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "CANCELED is the number of cancelled trips.",
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (schedule_relationship) (gtfs_rt_trip_updates{job=~\"$job\",network=\"$network\",instance=~\"$instance\"})",
+          "legendFormat": "{{schedule_relationship}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "title": "Stops by schedule relationship",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "SKIPPED is the number of skipped stops. NO_DATA means that the producer has no prediction for that stop.",
+      "gridPos": {
+        "x": 12,
+        "y": 17,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (schedule_relationship) (gtfs_rt_stop_time_updates{job=~\"$job\",network=\"$network\",instance=~\"$instance\"})",
+          "legendFormat": "{{schedule_relationship}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "title": "Occupancy and congestion",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "title": "Vehicles by occupancy",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Empty for most networks. Only 2 of 18 vehicle feeds measured publish occupancy at all.",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (occupancy_status) (gtfs_rt_vehicle_occupancy{job=~\"$job\",network=\"$network\",instance=~\"$instance\"})",
+          "legendFormat": "{{occupancy_status}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 11,
+      "title": "Vehicles by congestion",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Empty for a feed that omits the field.",
+      "gridPos": {
+        "x": 12,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (congestion_level) (gtfs_rt_vehicle_congestion{job=~\"$job\",network=\"$network\",instance=~\"$instance\"})",
+          "legendFormat": "{{congestion_level}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 12,
+      "title": "Alerts",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "title": "Alerts in force",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (severity_level) (gtfs_rt_alerts{job=~\"$job\",network=\"$network\",instance=~\"$instance\",active=\"true\"})",
+          "legendFormat": "{{severity_level}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 14,
+      "title": "Alerts by effect",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 35,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (effect) (gtfs_rt_alerts{job=~\"$job\",network=\"$network\",instance=~\"$instance\",active=\"true\"})",
+          "legendFormat": "{{effect}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 15,
+      "title": "Alerts by cause",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "",
+      "gridPos": {
+        "x": 16,
+        "y": 35,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (cause) (gtfs_rt_alerts{job=~\"$job\",network=\"$network\",instance=~\"$instance\",active=\"true\"})",
+          "legendFormat": "{{cause}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 16,
+      "title": "Informed entities, by selector field",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Never add these series. One selector can set several fields at once: MBTA sets route_id, route_type and direction_id on the same one.",
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (selector) (gtfs_rt_alert_informed_entities{job=~\"$job\",network=\"$network\",instance=~\"$instance\"})",
+          "legendFormat": "{{selector}}",
+          "refId": "A",
+          "format": "time_series",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 17,
+      "title": "Where the delay comes from",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 51,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 18,
+      "title": "Delay source, by feed",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "A producer value is what the operator published. A computed value is what this exporter derived from the static timetable, which is a weaker reading. Rennes and MBTA publish no delay of their own.",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "gtfs_rt_delay_source_info{job=~\"$job\",network=\"$network\",instance=~\"$instance\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "job": true
+            },
+            "renameByName": {
+              "instance": "Feed",
+              "network": "Network",
+              "source": "Source"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
