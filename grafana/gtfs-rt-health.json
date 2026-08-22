@@ -68,11 +68,7 @@
         "refresh": 1,
         "includeAll": false,
         "multi": false,
-        "current": {
-          "selected": true,
-          "text": "rennes",
-          "value": "rennes"
-        },
+        "current": {},
         "allValue": null,
         "description": "The dashboard shows one network. Metrics from different networks are not comparable and must never be summed together.",
         "options": [],
@@ -371,7 +367,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "A count and not a ratio. Coverage inside one feed is partial: Cannes publishes occupancy on 84 of its 85 vehicles.",
+      "description": "A count and not a ratio. Coverage inside one feed is partial: a producer commonly sets a field on most of its entities and not on all of them, and a ratio would hide the gap.",
       "gridPos": {
         "x": 0,
         "y": 20,
@@ -672,7 +668,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Range requests read 4.1 MB of the 271 MB Ile-de-France zip, which is 1.5%.",
+      "description": "Range requests fetch only the members that the exporter reads and skip the rest. On a large dataset the saving is most of the file, because the shapes and the stop times dominate it.",
       "gridPos": {
         "x": 14,
         "y": 37,
@@ -1071,7 +1067,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Several reasons are healthy. MBTA sends about 45% of its trip updates as stop-cancellation notices, and those appear under all_stops_skipped. Never alert on the total without splitting the label.",
+      "description": "Several reasons are healthy. A producer often sends a short update that skips a stop or two on a trip which is still running, and those appear under no_timeable_stop. Never alert on the total without splitting the label.",
       "gridPos": {
         "x": 0,
         "y": 24,

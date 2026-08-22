@@ -71,11 +71,7 @@
         "includeAll": false,
         "multi": false,
         "sort": 1,
-        "current": {
-          "selected": true,
-          "text": "rennes",
-          "value": "rennes"
-        }
+        "current": {}
       },
       {
         "name": "instance",
@@ -355,7 +351,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "A cancelled trip is one the operator has withdrawn. MBTA also sends stop-cancellation notices, which are not trip cancellations and are not counted here.",
+      "description": "A cancelled trip is one the operator has withdrawn. A stop-cancellation notice, which skips a stop on a trip that still runs, is not a cancellation and is not counted here.",
       "gridPos": {
         "x": 19,
         "y": 1,
@@ -709,7 +705,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "agency and route_type affect the whole network. unresolved_trip means the alert named a trip the timetable does not hold: SNCF writes a short trip identifier in its alerts and the long one in trips.txt, so none of its alerts resolves to a line.",
+      "description": "agency and route_type affect the whole network. unresolved_trip means the alert named a trip that the timetable does not hold, which happens when the alert feed and the static feed disagree on how a trip is identified.",
       "gridPos": {
         "x": 12,
         "y": 28,
@@ -745,7 +741,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "A producer value is what the operator published. A computed value is what this exporter derived from the timetable, which is a weaker reading. Rennes and MBTA publish no delay of their own.",
+      "description": "A producer value is what the operator published. A computed value is what this exporter derived from the timetable, which is a weaker reading. A feed that publishes no delay of its own can only be computed.",
       "gridPos": {
         "x": 0,
         "y": 35,

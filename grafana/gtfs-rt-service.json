@@ -68,11 +68,7 @@
         "refresh": 1,
         "includeAll": false,
         "multi": false,
-        "current": {
-          "selected": true,
-          "text": "rennes",
-          "value": "rennes"
-        },
+        "current": {},
         "allValue": null,
         "description": "The dashboard shows one network. Metrics from different networks are not comparable and must never be summed together.",
         "options": [],
@@ -191,7 +187,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Absent for a feed that publishes absolute times and no delay. Rennes and MBTA both do this, and an absent line is the correct answer.",
+      "description": "Absent for a feed that publishes absolute times and no delay field, unless the module loads the timetable. An absent line is the correct answer, not a fault.",
       "gridPos": {
         "x": 0,
         "y": 9,
@@ -587,7 +583,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Never add these series. One selector can set several fields at once: MBTA sets route_id, route_type and direction_id on the same one.",
+      "description": "One selector can set several fields at once, so these series do not sum to the number of selectors and must never be added together.",
       "gridPos": {
         "x": 0,
         "y": 43,
@@ -637,7 +633,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "A producer value is what the operator published. A computed value is what this exporter derived from the static timetable, which is a weaker reading. Rennes and MBTA publish no delay of their own.",
+      "description": "A producer value is what the operator published. A computed value is what this exporter derived from the static timetable, which is a weaker reading. A feed that publishes no delay of its own can only be computed.",
       "gridPos": {
         "x": 0,
         "y": 24,
