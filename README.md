@@ -26,12 +26,12 @@ Two settings can hurt you. Read this before you deploy.
 
 Match the scrape interval to the producer. GTFS-Realtime has no `ttl` field, so
 the exporter cannot advertise the right interval. Cadence in the wild varies by
-a factor of ten: Rennes publishes a new header timestamp every 10 seconds and
-SNCF every 94 seconds. Watch `gtfs_rt_feed_timestamp_seconds` and set the
+a factor of ten between the feeds measured, from a new header timestamp every
+10 seconds to one every 94. Watch `gtfs_rt_feed_timestamp_seconds` and set the
 interval from what you see.
 
-Count the routes of a network before you set `per_route`. Rennes has 52 routes.
-Ile-de-France has 1973.
+Count the routes of a network before you set `per_route`. A city network has
+tens of routes, a large metropolitan one has thousands.
 
 ## What the exporter reads
 
@@ -102,7 +102,7 @@ redirect into your network is refused, and the refusal is counted under
 
 The `static_gtfs` URL of a module skips the host test, because it comes from
 the configuration file and not from a caller. This matters in practice: the
-static feed of `data.gouv.fr` redirects to a third-party host.
+a static feed is commonly served through a redirect to a third-party host.
 
 ### Settings
 
@@ -136,21 +136,20 @@ A request that names no module gets the module called `default`.
 
 ## Static GTFS
 
-A realtime feed often names a trip and no route. **SNCF publishes 1140 trip
-updates and sets `route_id` on none of them.** Ile-de-France, Bourg-en-Bresse
-and others do the same. Without the static feed the exporter counts the trips
-but names no route.
+A realtime feed often names a trip and no route. **One feed measured publishes
+1140 trip updates and sets `route_id` on none of them**, and it is not alone.
+Without the static feed the exporter counts the trips but names no route.
 
 Give the module a `static_gtfs` URL and the exporter resolves the route of each
-trip. For SNCF that turns zero named routes into 460, with their short names
+trip. On that feed it turns zero named routes into 460, with their short names
 and their types.
 
 ```yaml
 modules:
-  sncf:
+  my-network:
     per_route: true
     static_gtfs:
-      url: https://www.data.gouv.fr/api/1/datasets/r/9ae758ec-cd7a-40cd-a890-bb3963224942
+      url: https://example.org/gtfs/static.zip
       refresh_interval: 12h
 ```
 
@@ -165,16 +164,17 @@ Four rules govern the loader.
 
 **It reads the small members only, unless you ask for a timetable.**
 `agency.txt`, `routes.txt`, `trips.txt`, `feed_info.txt` and the calendar. It
-never reads `shapes.txt`, which is 991 MB uncompressed for Ile-de-France, and
+never reads `shapes.txt`, which reaches 991 MB uncompressed on a large
+dataset, and
 it reads `stop_times.txt` only when a module sets `schedule`. See
 [The timetable](#the-timetable).
 
-**It uses HTTP range requests.** The Ile-de-France zip is 271 MB, and the
-exporter reads 4.1 MB of it, which is 1.5%. A server that does not answer a
+**It uses HTTP range requests.** On the largest dataset measured, a 271 MB
+zip, the exporter reads 4.1 MB of it, which is 1.5%. A server that does not answer a
 range request gets a full download instead. A conditional request with the
 stored `ETag` skips a refresh whose dataset has not changed.
 
-**A scrape never waits for a load.** Reading Ile-de-France takes about 30
+**A scrape never waits for a load.** Reading a large dataset takes about 30
 seconds. The load runs in the background, and until the first one finishes
 `gtfs_static_loaded` is 0 and every realtime metric still appears.
 
@@ -194,16 +194,16 @@ times, which phase 1 could not.
 measured already publish a delay of their own, and for those the timetable buys
 nothing at the price of the largest member of the zip.
 
-| Feed | `stop_times` rows | Live heap | Resident | Delay before | Delay now |
+| Network | `stop_times` rows | Live heap | Resident | Delay before | Delay now |
 | --- | --- | --- | --- | --- | --- |
-| Rennes STAR | 1,004,256 | 34 MB | 65 MB | none | median 0 s |
-| MBTA Boston | 2,221,062 | 63 MB | 105 MB | none | median 0 s |
-| SNCF | 394,083 | 35 MB | 65 MB | already had one | unchanged |
+| A city network | 1,004,256 | 34 MB | 65 MB | none | median 0 s |
+| A metropolitan network | 2,221,062 | 63 MB | 105 MB | none | median 0 s |
+| A national rail network | 394,083 | 35 MB | 65 MB | already had one | unchanged |
 
 Measured, not estimated. Budget about **30 to 40 bytes per stop-time row**, plus
-a fixed cost for the trip and route index that dominates a small timetable:
-SNCF holds 45,610 trips behind only 394,083 stop times, which is why its cost
-per row looks high.
+a fixed cost for the trip and route index that dominates a small timetable. The
+third row holds 45,610 trips behind only 394,083 stop times, which is why its
+cost per row looks high.
 
 Resident memory runs near twice the live heap at the default `GOGC`, because Go
 returns pages to the system lazily. Set `GOGC=20` to trade processor time for a
@@ -216,10 +216,10 @@ one.
 
 ### Renewal
 
-A dataset expires quickly, and the horizon varies by a factor of twenty:
-Rennes publishes a twelve day window, MBTA twenty five days, and SNCF one
-hundred and sixty two. So `refresh_interval` is a floor, and the expiry date in
-the data supplies a deadline on top:
+A dataset expires quickly, and the horizon varies by a factor of twenty across
+the feeds measured, from a twelve day window to a hundred and sixty two. So
+`refresh_interval` is a floor, and the expiry date in the data supplies a
+deadline on top:
 
 ```
 next = min(now + refresh_interval, expires - renew_before)
@@ -228,8 +228,8 @@ inside that margin: next = now + renew_interval
 
 The expiry comes from `feed_end_date`, and from the widest window of
 `calendar.txt` and `calendar_dates.txt` when the feed states none. Both are
-optional in GTFS, and SNCF needs the fallback because it expresses its whole
-service through `calendar_dates.txt`.
+optional in GTFS, and the fallback is not theoretical: a feed may state no
+window at all and express its whole service through `calendar_dates.txt`.
 
 **A dataset outside its window stops the delay.** A timetable that has expired
 describes a service that no longer runs, so a delay measured against it is
@@ -244,12 +244,12 @@ that happens, `gtfs_static_pending` is 1.
 ### What the static feed still cannot fix
 
 - The route of an alert that names a stop. An alert that names a trip resolves
-  through the timetable, **when the two feeds agree on the identifier**. SNCF
-  does not: its alerts write a short trip identifier such as `OCEEA436112R`
-  while `trips.txt` writes a long composite one, so none of its 7,231 alert
-  trips matches. Those are counted under
+  through the timetable, **when the two feeds agree on the identifier**. One
+  feed measured does not: its alerts write a short trip identifier while
+  `trips.txt` writes a long composite one, so none of its 7,231 alert trips
+  matches. Those are counted under
   `gtfs_rt_alerts_unresolved{scope="unresolved_trip"}` rather than guessed at.
-  MBTA names routes directly and resolves cleanly.
+  A feed that names routes directly resolves cleanly.
 - A blank time at a stop that is not a timepoint. GTFS expects the reader to
   interpolate between the surrounding timepoints, and this exporter does not:
   it skips the row. A feed that marks only its timepoints therefore yields
@@ -279,7 +279,7 @@ that happens, `gtfs_static_pending` is 1.
 | `module` | no | Name of a module. The default is `default`. |
 
 ```sh
-curl 'localhost:10053/probe?target=https://cdn.mbta.com/realtime/VehiclePositions.pb'
+curl 'localhost:10053/probe?target=https://example.org/gtfs-rt/vehicle-positions.pb'
 ```
 
 ### The network label
@@ -340,8 +340,8 @@ omitted this" without losing that meaning.
 | `gtfs_rt_alert_informed_entities` | `selector` | Selector **fields**, by field name. |
 
 Never add the `gtfs_rt_alert_informed_entities` series together. One selector
-can set several fields at once: MBTA sets `route_id`, `route_type` and
-`direction_id` on the same one.
+can set several fields at once: a producer commonly sets `route_id`,
+`route_type` and `direction_id` on the same one.
 
 The exporter reads `impact_period` first, then `communication_period`, then the
 deprecated `active_period`. An alert with no period at all is active, because
@@ -357,9 +357,9 @@ the specification shows it for as long as it appears in the feed.
 | `gtfs_rt_entities_deleted` | | Entities that set `is_deleted` on a `FULL_DATASET` feed. |
 
 `gtfs_rt_entities_with_field` is a count and not a ratio. Coverage inside one
-feed is partial: Cannes publishes occupancy on 84 of its 85 vehicles, MBTA on
-355 of its 473, and Amiens publishes `route_id` on 52 of its 54. Divide by
-`gtfs_rt_entities` when you want a ratio.
+feed is partial. Among the feeds measured, one publishes occupancy for 84 of
+its 85 vehicles, another for 355 of its 473, and a third publishes `route_id`
+for 52 of its 54. Divide by `gtfs_rt_entities` when you want a ratio.
 
 ### Static index
 
@@ -423,9 +423,9 @@ vanishes cannot fire an alert.
 
 **A delay is not always possible, and this is the most common surprise.**
 
-Of the six trip-update feeds measured, two publish no delay at all. Rennes
-sends 7843 stop time updates with absolute times only, and MBTA sends 22,642
-the same way. For those feeds, set `schedule: true` on the module and the
+Of the six trip-update feeds measured, two publish no delay at all. One sends
+7843 stop time updates with absolute times only, another 22,642 the same way.
+For those feeds, set `schedule: true` on the module and the
 exporter measures the predictions against the timetable. See
 [The timetable](#the-timetable).
 
@@ -438,27 +438,28 @@ derived. The second is the weaker reading.
 
 The exporter takes one observation per trip, in this order:
 
-1. `TripUpdate.delay`, the trip-level field. Only Trenitalia sets it.
+1. `TripUpdate.delay`, the trip-level field. Only one feed measured sets it.
 2. The `delay` of the first stop time update that the vehicle has not passed,
-   preferring `departure` over `arrival`. SNCF, Nantes and Clermont use this.
+   preferring `departure` over `arrival`. Most producers use this.
 3. The difference between `time` and `scheduled_time` on a stop time event.
    This is the newer form of the specification, and it is the only way that a
    feed can state a delay with no static schedule. No feed measured sets it
    yet.
 4. The predicted time minus the scheduled time from the timetable, when the
-   module set `schedule`. Rennes and MBTA need this and nothing else gives them
-   a delay. The join uses `stop_sequence` when the producer sends one, as MBTA
-   does, and `stop_id` otherwise, as Rennes forces.
+   module set `schedule`. This is the only source for a feed that publishes
+   absolute times alone. The join uses `stop_sequence` when the producer sends
+   one, and `stop_id` otherwise, because some producers send no sequence.
 5. Nothing.
 
 A cancelled trip never contributes. A stop marked `SKIPPED` or `NO_DATA` never
 contributes, because `NO_DATA` states that the producer has no prediction.
 
 `gtfs_rt_trips_without_schedule` says why a trip produced no delay, by reason.
-**Several reasons are healthy.** MBTA sends about 45% of its trip updates as
-stop-cancellation notices, where every stop is `SKIPPED` and none carries a
-prediction: those appear under `all_stops_skipped`. Never alert on the total
-without splitting the label.
+**Several reasons are healthy.** A producer commonly sends a short update that
+skips a stop or two on a trip which is still running: every stop it carries is
+`SKIPPED`, so none can be timed, and those appear under `no_timeable_stop`. On
+one feed measured that is about 40% of its trip updates. Never alert on the
+total without splitting the label.
 
 The default buckets cover -600 to 7200 seconds. Measured delays run from -493
 seconds early to 7800 seconds late.
@@ -499,13 +500,13 @@ scrape_configs:
     metrics_path: /probe
     static_configs:
       - targets:
-          - https://proxy.transport.data.gouv.fr/resource/star-rennes-integration-gtfs-rt-trip-update
-          - https://proxy.transport.data.gouv.fr/resource/star-rennes-integration-gtfs-rt-vehicle-position
-          - https://proxy.transport.data.gouv.fr/resource/star-rennes-integration-gtfs-rt-alerts
+          - https://example.org/gtfs-rt/trip-updates.pb
+          - https://example.org/gtfs-rt/vehicle-positions.pb
+          - https://example.org/gtfs-rt/alerts.pb
         labels:
-          network: rennes
+          network: my-network
     params:
-      module: [rennes]
+      module: [my-network]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
